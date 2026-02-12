@@ -27,6 +27,7 @@ Server commands:
   uninstall   Remove the background service
   status      Show service status (or use 'companion status' when server is running)
   logs        Tail service log files
+  tunnel-setup Run interactive Cloudflare Tunnel setup wizard
   help        Show this help message
 
 Management commands (requires running server):
@@ -39,6 +40,7 @@ Management commands (requires running server):
 
 Options:
   --port <n>  Override the default port (default: 3456)
+  --tunnel    Start Cloudflare Tunnel on boot
 `);
 }
 
@@ -148,9 +150,19 @@ switch (command) {
     break;
   }
 
+  case "tunnel-setup": {
+    const { runInteractiveSetup } = await import("../server/tunnel-setup.js");
+    await runInteractiveSetup();
+    break;
+  }
+
   case undefined: {
     // Default: start server in foreground
     process.env.NODE_ENV = process.env.NODE_ENV || "production";
+    // Check for --tunnel flag
+    if (process.argv.includes("--tunnel")) {
+      process.env.__COMPANION_TUNNEL = "1";
+    }
     await import("../server/index.ts");
     break;
   }

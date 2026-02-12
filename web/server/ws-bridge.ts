@@ -1269,6 +1269,20 @@ export class WsBridge {
     this.broadcastToBrowsers(session, { type: "session_name_update", name });
   }
 
+  /** Broadcast a message to every connected browser across all sessions. */
+  broadcastToAll(msg: BrowserIncomingMessage): void {
+    const json = JSON.stringify(msg);
+    for (const session of this.sessions.values()) {
+      for (const ws of session.browserSockets) {
+        try {
+          ws.send(json);
+        } catch {
+          session.browserSockets.delete(ws);
+        }
+      }
+    }
+  }
+
   private shouldBufferForReplay(msg: BrowserIncomingMessage): msg is ReplayableBrowserIncomingMessage {
     return msg.type !== "session_init"
       && msg.type !== "message_history"

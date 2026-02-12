@@ -204,7 +204,8 @@ export type BrowserIncomingMessageBase =
   | { type: "event_replay"; events: BufferedBrowserEvent[] }
   | { type: "session_name_update"; name: string }
   | { type: "pr_status_update"; pr: import("./github-pr.js").GitHubPRInfo | null; available: boolean }
-  | { type: "mcp_status"; servers: McpServerDetail[] };
+  | { type: "mcp_status"; servers: McpServerDetail[] }
+  | { type: "tunnel_status"; state: { status: string; hostname: string | null; connectedAt: number | null; error: string | null; connections: number } };
 
 export type BrowserIncomingMessage = BrowserIncomingMessageBase & { seq?: number };
 
