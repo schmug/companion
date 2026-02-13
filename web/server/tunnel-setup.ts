@@ -69,6 +69,10 @@ export async function runInteractiveSetup(): Promise<void> {
     console.log("  Hostname is required.");
     process.exit(1);
   }
+  if (!hostname.includes(".")) {
+    console.log(`  "${hostname}" doesn't look like a valid hostname. Use a full domain like companion.example.com`);
+    process.exit(1);
+  }
 
   console.log(`  Routing DNS ${hostname} → tunnel...`);
   const routeResult = await TunnelManager.routeDns(tunnelName, hostname);
