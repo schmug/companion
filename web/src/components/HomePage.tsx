@@ -305,9 +305,6 @@ export function HomePage() {
       // Save cwd to recent dirs
       if (cwd) addRecentDir(cwd);
 
-      // Store the permission mode for this session
-      useStore.getState().setPreviousPermissionMode(sessionId, mode);
-
       // Switch to session
       setCurrentSession(sessionId);
       connectSession(sessionId);

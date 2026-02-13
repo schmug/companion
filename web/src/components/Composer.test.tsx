@@ -25,8 +25,6 @@ vi.mock("../api.js", () => ({
 // Mock useStore as a function that takes a selector
 const mockAppendMessage = vi.fn();
 const mockUpdateSession = vi.fn();
-const mockSetPreviousPermissionMode = vi.fn();
-
 vi.mock("../store.js", () => {
   // Create a mock store function that acts like zustand's useStore
   const useStore = (selector: (state: Record<string, unknown>) => unknown) => {
@@ -86,17 +84,12 @@ function setupMockStore(overrides: {
   const sessionStatusMap = new Map<string, "idle" | "running" | "compacting" | null>();
   sessionStatusMap.set("s1", sessionStatus);
 
-  const previousPermissionModeMap = new Map<string, string>();
-  previousPermissionModeMap.set("s1", "acceptEdits");
-
   mockStoreState = {
     sessions: sessionsMap,
     cliConnected: cliConnectedMap,
     sessionStatus: sessionStatusMap,
-    previousPermissionMode: previousPermissionModeMap,
     appendMessage: mockAppendMessage,
     updateSession: mockUpdateSession,
-    setPreviousPermissionMode: mockSetPreviousPermissionMode,
   };
 }
 
@@ -198,17 +191,31 @@ describe("Composer sending messages", () => {
 
 // ─── Plan mode toggle ────────────────────────────────────────────────────────
 
-describe("Composer plan mode toggle", () => {
-  it("pressing Shift+Tab toggles plan mode", () => {
+describe("Composer mode cycling", () => {
+  it("pressing Shift+Tab cycles to next mode", () => {
+    // Default session has permissionMode: "acceptEdits" (index 1)
+    // Next mode in CLAUDE_MODES is "bypassPermissions" (index 2)
     const { container } = render(<Composer sessionId="s1" />);
     const textarea = container.querySelector("textarea")!;
 
     fireEvent.keyDown(textarea, { key: "Tab", shiftKey: true });
 
-    // Should call sendToSession to set plan mode
     expect(mockSendToSession).toHaveBeenCalledWith("s1", {
       type: "set_permission_mode",
-      mode: "plan",
+      mode: "bypassPermissions",
+    });
+  });
+
+  it("pressing Shift+Tab wraps around from plan to default", () => {
+    setupMockStore({ session: { permissionMode: "plan" } });
+    const { container } = render(<Composer sessionId="s1" />);
+    const textarea = container.querySelector("textarea")!;
+
+    fireEvent.keyDown(textarea, { key: "Tab", shiftKey: true });
+
+    expect(mockSendToSession).toHaveBeenCalledWith("s1", {
+      type: "set_permission_mode",
+      mode: "default",
     });
   });
 });
