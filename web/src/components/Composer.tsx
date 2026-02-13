@@ -31,18 +31,61 @@ interface CommandItem {
   type: "command" | "skill";
 }
 
+function ModeIcon({ mode }: { mode: string }) {
+  const cls = "w-3.5 h-3.5";
+  switch (mode) {
+    case "default":
+      return (
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className={cls}>
+          <path d="M8 2L3 5v4c0 3 2.5 4.5 5 5.5 2.5-1 5-2.5 5-5.5V5L8 2z" strokeLinejoin="round" />
+        </svg>
+      );
+    case "acceptEdits":
+      return (
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className={cls}>
+          <path d="M11.5 2.5l2 2-8 8H3.5v-2l8-8z" strokeLinejoin="round" />
+        </svg>
+      );
+    case "plan":
+      return (
+        <svg viewBox="0 0 16 16" fill="currentColor" className={cls}>
+          <rect x="3" y="3" width="3.5" height="10" rx="0.75" />
+          <rect x="9.5" y="3" width="3.5" height="10" rx="0.75" />
+        </svg>
+      );
+    default: // bypassPermissions / agent
+      return (
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" className={cls}>
+          <path d="M2.5 4l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M8.5 4l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+  }
+}
+
+function modeDescription(mode: string): string {
+  switch (mode) {
+    case "default": return "prompts all";
+    case "acceptEdits": return "auto-edits";
+    case "bypassPermissions": return "auto-all";
+    case "plan": return "read-only";
+    default: return "";
+  }
+}
+
 export function Composer({ sessionId }: { sessionId: string }) {
   const [text, setText] = useState("");
   const [images, setImages] = useState<ImageAttachment[]>([]);
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashMenuIndex, setSlashMenuIndex] = useState(0);
+  const [showModeMenu, setShowModeMenu] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const modeMenuRef = useRef<HTMLDivElement>(null);
   const cliConnected = useStore((s) => s.cliConnected);
   const assistantSessionId = useStore((s) => s.assistantSessionId);
   const sessionData = useStore((s) => s.sessions.get(sessionId));
-  const previousMode = useStore((s) => s.previousPermissionMode.get(sessionId) || "acceptEdits");
 
   const isConnected = cliConnected.get(sessionId) ?? false;
   const currentMode = sessionData?.permissionMode || "acceptEdits";
@@ -173,7 +216,12 @@ export function Composer({ sessionId }: { sessionId: string }) {
 
     if (e.key === "Tab" && e.shiftKey) {
       e.preventDefault();
-      toggleMode();
+      cycleMode();
+      return;
+    }
+    if (e.key === "Escape" && showModeMenu) {
+      e.preventDefault();
+      setShowModeMenu(false);
       return;
     }
     if (e.key === "Enter" && !e.shiftKey) {
@@ -227,19 +275,31 @@ export function Composer({ sessionId }: { sessionId: string }) {
     }
   }
 
-  function toggleMode() {
+  function setMode(mode: string) {
     if (!isConnected || isCodex) return;
-    const store = useStore.getState();
-    if (!isPlan) {
-      store.setPreviousPermissionMode(sessionId, currentMode);
-      sendToSession(sessionId, { type: "set_permission_mode", mode: "plan" });
-      store.updateSession(sessionId, { permissionMode: "plan" });
-    } else {
-      const restoreMode = previousMode || "acceptEdits";
-      sendToSession(sessionId, { type: "set_permission_mode", mode: restoreMode });
-      store.updateSession(sessionId, { permissionMode: restoreMode });
-    }
+    sendToSession(sessionId, { type: "set_permission_mode", mode });
+    useStore.getState().updateSession(sessionId, { permissionMode: mode });
+    setShowModeMenu(false);
   }
+
+  function cycleMode() {
+    if (!isConnected || isCodex) return;
+    const idx = modes.findIndex((m) => m.value === currentMode);
+    const next = modes[(idx + 1) % modes.length];
+    setMode(next.value);
+  }
+
+  // Close mode menu on click outside
+  useEffect(() => {
+    if (!showModeMenu) return;
+    function handleClick(e: MouseEvent) {
+      if (modeMenuRef.current && !modeMenuRef.current.contains(e.target as Node)) {
+        setShowModeMenu(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showModeMenu]);
 
   const sessionStatus = useStore((s) => s.sessionStatus);
   const isRunning = sessionStatus.get(sessionId) === "running";
@@ -388,7 +448,7 @@ export function Composer({ sessionId }: { sessionId: string }) {
 
           {/* Bottom toolbar */}
           <div className="flex items-center justify-between px-2.5 pb-2.5">
-            {/* Left: mode indicator — static for assistant (always bypass) */}
+            {/* Left: mode selector — static for assistant (always bypass) */}
             {sessionId === assistantSessionId ? (
               <span className="flex items-center gap-1.5 px-2 py-1 text-[12px] font-medium text-cc-muted select-none">
                 <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
@@ -398,31 +458,47 @@ export function Composer({ sessionId }: { sessionId: string }) {
                 <span>bypass</span>
               </span>
             ) : (
-              <button
-                onClick={toggleMode}
-                disabled={!isConnected || isCodex}
-                className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[12px] font-medium transition-all select-none ${
-                  !isConnected || isCodex
-                    ? "opacity-30 cursor-not-allowed text-cc-muted"
-                    : isPlan
-                    ? "text-cc-primary hover:bg-cc-primary/10 cursor-pointer"
-                    : "text-cc-muted hover:text-cc-fg hover:bg-cc-hover cursor-pointer"
-                }`}
-                title={isCodex ? "Mode is fixed for Codex sessions" : "Toggle mode (Shift+Tab)"}
-              >
-                {isPlan ? (
-                  <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
-                    <rect x="3" y="3" width="3.5" height="10" rx="0.75" />
-                    <rect x="9.5" y="3" width="3.5" height="10" rx="0.75" />
+              <div className="relative" ref={modeMenuRef}>
+                <button
+                  onClick={() => !isCodex && isConnected && setShowModeMenu((v) => !v)}
+                  disabled={!isConnected || isCodex}
+                  className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[12px] font-medium transition-all select-none ${
+                    !isConnected || isCodex
+                      ? "opacity-30 cursor-not-allowed text-cc-muted"
+                      : isPlan
+                      ? "text-cc-primary hover:bg-cc-primary/10 cursor-pointer"
+                      : "text-cc-muted hover:text-cc-fg hover:bg-cc-hover cursor-pointer"
+                  }`}
+                  title={isCodex ? "Mode is fixed for Codex sessions" : "Change mode (Shift+Tab)"}
+                >
+                  <ModeIcon mode={currentMode} />
+                  <span>{modeLabel}</span>
+                  <svg viewBox="0 0 16 16" fill="currentColor" className="w-2.5 h-2.5 opacity-50">
+                    <path d="M4 6l4 4 4-4" />
                   </svg>
-                ) : (
-                  <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
-                    <path d="M2.5 4l4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                    <path d="M8.5 4l4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                  </svg>
+                </button>
+
+                {/* Mode popover */}
+                {showModeMenu && (
+                  <div className="absolute left-0 bottom-full mb-1 min-w-[180px] bg-cc-card border border-cc-border rounded-lg shadow-lg z-30 py-1">
+                    {modes.map((m) => (
+                      <button
+                        key={m.value}
+                        onClick={() => setMode(m.value)}
+                        className={`w-full px-3 py-1.5 text-left flex items-center gap-2 text-[12px] transition-colors cursor-pointer ${
+                          m.value === currentMode
+                            ? "bg-cc-primary/10 text-cc-primary font-medium"
+                            : "text-cc-fg hover:bg-cc-hover"
+                        }`}
+                      >
+                        <ModeIcon mode={m.value} />
+                        <span>{m.label}</span>
+                        <span className="ml-auto text-[10px] text-cc-muted">{modeDescription(m.value)}</span>
+                      </button>
+                    ))}
+                  </div>
                 )}
-                <span>{modeLabel}</span>
-              </button>
+              </div>
             )}
 
             {/* Right: image + send/stop */}

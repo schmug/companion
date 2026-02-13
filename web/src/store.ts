@@ -29,9 +29,6 @@ interface AppState {
   // Session status
   sessionStatus: Map<string, "idle" | "running" | "compacting" | null>;
 
-  // Plan mode: stores previous permission mode per session so we can restore it
-  previousPermissionMode: Map<string, string>;
-
   // Tasks per session
   sessionTasks: Map<string, TaskItem[]>;
 
@@ -128,9 +125,6 @@ interface AppState {
 
   // Sidebar project grouping actions
   toggleProjectCollapse: (projectKey: string) => void;
-
-  // Plan mode actions
-  setPreviousPermissionMode: (sessionId: string, mode: string) => void;
 
   // Tunnel actions
   setTunnelStatus: (status: AppState["tunnelStatus"]) => void;
@@ -230,7 +224,6 @@ export const useStore = create<AppState>((set) => ({
   connectionStatus: new Map(),
   cliConnected: new Map(),
   sessionStatus: new Map(),
-  previousPermissionMode: new Map(),
   sessionTasks: new Map(),
   changedFiles: new Map(),
   sessionNames: getInitialSessionNames(),
@@ -344,8 +337,6 @@ export const useStore = create<AppState>((set) => ({
       cliConnected.delete(sessionId);
       const sessionStatus = new Map(s.sessionStatus);
       sessionStatus.delete(sessionId);
-      const previousPermissionMode = new Map(s.previousPermissionMode);
-      previousPermissionMode.delete(sessionId);
       const pendingPermissions = new Map(s.pendingPermissions);
       pendingPermissions.delete(sessionId);
       const sessionTasks = new Map(s.sessionTasks);
@@ -377,7 +368,6 @@ export const useStore = create<AppState>((set) => ({
         connectionStatus,
         cliConnected,
         sessionStatus,
-        previousPermissionMode,
         pendingPermissions,
         sessionTasks,
         changedFiles,
@@ -590,13 +580,6 @@ export const useStore = create<AppState>((set) => ({
       return { collapsedProjects };
     }),
 
-  setPreviousPermissionMode: (sessionId, mode) =>
-    set((s) => {
-      const previousPermissionMode = new Map(s.previousPermissionMode);
-      previousPermissionMode.set(sessionId, mode);
-      return { previousPermissionMode };
-    }),
-
   setTunnelStatus: (status) => set({ tunnelStatus: status }),
 
   setConnectionStatus: (sessionId, status) =>
@@ -659,7 +642,6 @@ export const useStore = create<AppState>((set) => ({
       connectionStatus: new Map(),
       cliConnected: new Map(),
       sessionStatus: new Map(),
-      previousPermissionMode: new Map(),
       sessionTasks: new Map(),
       changedFiles: new Map(),
       sessionNames: new Map(),

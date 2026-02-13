@@ -163,8 +163,6 @@ describe("Session management", () => {
     useStore.getState().setConnectionStatus("s1", "connected");
     useStore.getState().setCliConnected("s1", true);
     useStore.getState().setSessionStatus("s1", "running");
-    useStore.getState().setPreviousPermissionMode("s1", "default");
-
     useStore.getState().removeSession("s1");
     const state = useStore.getState();
 
@@ -179,7 +177,6 @@ describe("Session management", () => {
     expect(state.connectionStatus.has("s1")).toBe(false);
     expect(state.cliConnected.has("s1")).toBe(false);
     expect(state.sessionStatus.has("s1")).toBe(false);
-    expect(state.previousPermissionMode.has("s1")).toBe(false);
     expect(state.currentSessionId).toBeNull();
   });
 
@@ -516,7 +513,6 @@ describe("reset", () => {
     useStore.getState().setConnectionStatus("s1", "connected");
     useStore.getState().setCliConnected("s1", true);
     useStore.getState().setSessionStatus("s1", "running");
-    useStore.getState().setPreviousPermissionMode("s1", "default");
     useStore.getState().setSdkSessions([
       { sessionId: "s1", state: "connected", cwd: "/", createdAt: 0 },
     ]);
@@ -535,7 +531,6 @@ describe("reset", () => {
     expect(state.connectionStatus.size).toBe(0);
     expect(state.cliConnected.size).toBe(0);
     expect(state.sessionStatus.size).toBe(0);
-    expect(state.previousPermissionMode.size).toBe(0);
     expect(state.sessionTasks.size).toBe(0);
     expect(state.sessionNames.size).toBe(0);
     expect(state.recentlyRenamed.size).toBe(0);
