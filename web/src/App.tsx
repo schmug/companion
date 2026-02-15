@@ -3,6 +3,7 @@ import { useStore } from "./store.js";
 import { connectSession } from "./ws.js";
 import { api } from "./api.js";
 import { capturePageView } from "./analytics.js";
+import { registerServiceWorker, setupSwMessageListener } from "./utils/push-notifications.js";
 import { Sidebar } from "./components/Sidebar.js";
 import { ChatView } from "./components/ChatView.js";
 import { TopBar } from "./components/TopBar.js";
@@ -50,6 +51,27 @@ export default function App() {
       connectSession(restoredId);
     }
   }, []);
+
+  // Register service worker for push notifications
+  useEffect(() => {
+    registerServiceWorker();
+    setupSwMessageListener((sessionId) => {
+      useStore.getState().setCurrentSession(sessionId);
+      connectSession(sessionId);
+      window.location.hash = "";
+    });
+  }, []);
+
+  // Handle #/session/:id deep links (from push notification clicks)
+  useEffect(() => {
+    const match = hash.match(/^#\/session\/(.+)$/);
+    if (match) {
+      const targetId = match[1];
+      useStore.getState().setCurrentSession(targetId);
+      connectSession(targetId);
+      window.location.hash = "";
+    }
+  }, [hash]);
 
   // Poll for updates
   useEffect(() => {

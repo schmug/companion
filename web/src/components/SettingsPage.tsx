@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api.js";
 import { useStore } from "../store.js";
 import { getTelemetryPreferenceEnabled, setTelemetryPreferenceEnabled } from "../analytics.js";
+import { isPushSupported, subscribeToPush, unsubscribeFromPush } from "../utils/push-notifications.js";
 
 interface SettingsPageProps {
   embedded?: boolean;
@@ -23,6 +24,11 @@ export function SettingsPage({ embedded = false }: SettingsPageProps) {
   const setNotificationDesktop = useStore((s) => s.setNotificationDesktop);
   const updateInfo = useStore((s) => s.updateInfo);
   const setUpdateInfo = useStore((s) => s.setUpdateInfo);
+  const pushNotificationsEnabled = useStore((s) => s.pushNotificationsEnabled);
+  const setPushNotificationsEnabled = useStore((s) => s.setPushNotificationsEnabled);
+  const pushSupported = isPushSupported();
+  const isSecureContext = typeof window !== "undefined" && window.isSecureContext;
+  const [pushToggling, setPushToggling] = useState(false);
   const notificationApiAvailable = typeof Notification !== "undefined";
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [updatingApp, setUpdatingApp] = useState(false);
@@ -216,6 +222,37 @@ export function SettingsPage({ embedded = false }: SettingsPageProps) {
               <span>Desktop Alerts</span>
               <span className="text-xs text-cc-muted">{notificationDesktop ? "On" : "Off"}</span>
             </button>
+          )}
+          {pushSupported && isSecureContext ? (
+            <button
+              type="button"
+              disabled={pushToggling}
+              onClick={async () => {
+                setPushToggling(true);
+                try {
+                  if (!pushNotificationsEnabled) {
+                    const ok = await subscribeToPush();
+                    if (ok) setPushNotificationsEnabled(true);
+                  } else {
+                    const ok = await unsubscribeFromPush();
+                    if (ok) setPushNotificationsEnabled(false);
+                  }
+                } finally {
+                  setPushToggling(false);
+                }
+              }}
+              className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm bg-cc-hover text-cc-fg hover:bg-cc-active transition-colors cursor-pointer disabled:opacity-50"
+            >
+              <span>Push Notifications</span>
+              <span className="text-xs text-cc-muted">
+                {pushToggling ? "..." : pushNotificationsEnabled ? "On" : "Off"}
+              </span>
+            </button>
+          ) : (
+            <div className="flex items-center justify-between px-3 py-2 rounded-lg text-sm bg-cc-hover text-cc-muted">
+              <span>Push Notifications</span>
+              <span className="text-xs">{!isSecureContext ? "Requires HTTPS" : "Not supported"}</span>
+            </div>
           )}
         </div>
 

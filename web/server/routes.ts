@@ -25,6 +25,7 @@ import {
   setUpdateInProgress,
 } from "./update-checker.js";
 import { refreshServiceDefinition } from "./service.js";
+import * as pushManager from "./push-manager.js";
 
 const UPDATE_CHECK_STALE_MS = 5 * 60 * 1000;
 
@@ -1080,6 +1081,33 @@ export function createRoutes(
       }
     });
   }
+
+  // ─── Push Notifications ─────────────────────────────────────────────
+
+  api.get("/push/vapid-key", (c) => {
+    return c.json({ publicKey: pushManager.getVapidPublicKey() });
+  });
+
+  api.post("/push/subscribe", async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    if (!body.endpoint || !body.keys?.p256dh || !body.keys?.auth) {
+      return c.json({ error: "Invalid push subscription" }, 400);
+    }
+    pushManager.addSubscription({
+      endpoint: body.endpoint,
+      keys: { p256dh: body.keys.p256dh, auth: body.keys.auth },
+    });
+    return c.json({ ok: true }, 201);
+  });
+
+  api.post("/push/unsubscribe", async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    if (!body.endpoint) {
+      return c.json({ error: "endpoint required" }, 400);
+    }
+    pushManager.removeSubscription(body.endpoint);
+    return c.json({ ok: true });
+  });
 
   // ─── Helper ─────────────────────────────────────────────────────────
 
