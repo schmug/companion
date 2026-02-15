@@ -26,6 +26,7 @@ import type {
 } from "./session-types.js";
 import type { SessionStore } from "./session-store.js";
 import type { CodexAdapter } from "./codex-adapter.js";
+import { sendPushToAll } from "./push-manager.js";
 
 // ─── WebSocket data tags ──────────────────────────────────────────────────────
 
@@ -577,6 +578,12 @@ export class WsBridge {
     console.log(`[ws-bridge] CLI disconnected for session ${sessionId}`);
     this.broadcastToBrowsers(session, { type: "cli_disconnected" });
 
+    sendPushToAll({
+      title: "CLI disconnected",
+      body: "Claude Code process disconnected",
+      data: { sessionId, type: "error" },
+    });
+
     // Cancel any pending permission requests
     for (const [reqId] of session.pendingPermissions) {
       this.broadcastToBrowsers(session, { type: "permission_cancelled", request_id: reqId });
@@ -802,6 +809,12 @@ export class WsBridge {
     this.broadcastToBrowsers(session, browserMsg);
     this.persistSession(session);
 
+    sendPushToAll({
+      title: "Session completed",
+      body: msg.is_error ? `Error: ${msg.errors?.join(", ") || "Unknown error"}` : "Claude finished the task",
+      data: { sessionId: session.id, type: "result" },
+    });
+
     // Trigger auto-naming after the first successful result for this session.
     // Note: num_turns counts all internal tool-use turns, so it's typically > 1
     // even on the first user interaction. We track per-session instead.
@@ -847,6 +860,12 @@ export class WsBridge {
         request: perm,
       });
       this.persistSession(session);
+
+      sendPushToAll({
+        title: "Permission needed",
+        body: `${perm.tool_name}: approve or deny`,
+        data: { sessionId: session.id, type: "permission_request" },
+      });
     }
   }
 
