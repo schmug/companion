@@ -352,12 +352,21 @@ export class CliLauncher {
 
     console.log(`[cli-launcher] Spawning session ${sessionId}: ${binary} ${args.join(" ")}`);
 
-    const proc = Bun.spawn([binary, ...args], {
-      cwd: info.cwd,
-      env,
-      stdout: "pipe",
-      stderr: "pipe",
-    });
+    let proc: Subprocess;
+    try {
+      proc = Bun.spawn([binary, ...args], {
+        cwd: info.cwd,
+        env,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+    } catch (e) {
+      console.error(`[cli-launcher] Failed to spawn CLI for session ${sessionId}:`, (e as Error).message);
+      info.state = "exited";
+      info.exitCode = 127;
+      this.persistState();
+      return;
+    }
 
     info.pid = proc.pid;
     this.processes.set(sessionId, proc);
@@ -506,13 +515,22 @@ export class CliLauncher {
 
     console.log(`[cli-launcher] Spawning Codex session ${sessionId}: ${spawnCmd.join(" ")}`);
 
-    const proc = Bun.spawn(spawnCmd, {
-      cwd: info.cwd,
-      env,
-      stdin: "pipe",
-      stdout: "pipe",
-      stderr: "pipe",
-    });
+    let proc: Subprocess;
+    try {
+      proc = Bun.spawn(spawnCmd, {
+        cwd: info.cwd,
+        env,
+        stdin: "pipe",
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+    } catch (e) {
+      console.error(`[cli-launcher] Failed to spawn Codex for session ${sessionId}:`, (e as Error).message);
+      info.state = "exited";
+      info.exitCode = 127;
+      this.persistState();
+      return;
+    }
 
     info.pid = proc.pid;
     this.processes.set(sessionId, proc);
