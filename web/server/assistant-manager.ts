@@ -134,14 +134,12 @@ The skill will be available in the next Claude Code session as \`/my-skill\`.
 export class AssistantManager {
   private launcher: CliLauncher;
   private wsBridge: WsBridge;
-  private port: number;
   private config: AssistantConfig = { ...DEFAULT_CONFIG };
   private relaunching = false;
 
-  constructor(launcher: CliLauncher, wsBridge: WsBridge, port: number) {
+  constructor(launcher: CliLauncher, wsBridge: WsBridge) {
     this.launcher = launcher;
     this.wsBridge = wsBridge;
-    this.port = port;
     this.loadConfig();
   }
 
@@ -196,9 +194,6 @@ export class AssistantManager {
       permissionMode: this.config.permissionMode,
       cwd: ASSISTANT_DIR,
       backendType: "claude",
-      env: {
-        COMPANION_PORT: String(this.port),
-      },
     });
 
     this.config.sessionId = session.sessionId;

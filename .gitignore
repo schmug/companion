@@ -12,3 +12,4 @@ web/.env.local
 .dev-*.pid
 .dev-*.log
 .worktrees/
+web/bin/companion

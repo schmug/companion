@@ -3,10 +3,18 @@ process.env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1";
 // Enrich process PATH at startup so binary resolution and `which` calls can find
 // binaries installed via version managers (nvm, volta, fnm, etc.).
 // Critical when running as a launchd/systemd service with a restricted PATH.
+// We append enriched dirs rather than prepend, so the current process PATH
+// (which may have nvm/fnm-managed node) keeps its priority.
 import { getEnrichedPath } from "./path-resolver.js";
-process.env.PATH = getEnrichedPath();
+{
+  const current = new Set((process.env.PATH || "").split(":"));
+  const extra = getEnrichedPath().split(":").filter((d) => d && !current.has(d));
+  if (extra.length) {
+    process.env.PATH = `${process.env.PATH}:${extra.join(":")}`;
+  }
+}
 
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -36,6 +44,23 @@ import type { ServerWebSocket } from "bun";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageRoot = process.env.__COMPANION_PACKAGE_ROOT || resolve(__dirname, "..");
 
+// Ensure a `companion` symlink exists in the bin dir so spawned agents can
+// find the CLI via PATH. In dev mode the package isn't globally installed,
+// so this symlink bridges the gap. Non-fatal if it fails.
+{
+  const { existsSync, symlinkSync } = await import("node:fs");
+  const companionLink = join(packageRoot, "bin", "companion");
+  if (!existsSync(companionLink)) {
+    try {
+      symlinkSync("cli.ts", companionLink);
+      console.log(`[server] Created companion symlink at ${companionLink}`);
+    } catch (e) {
+      // Non-fatal — may fail on read-only filesystems or if already exists as a file
+      console.warn(`[server] Could not create companion symlink: ${(e as Error).message}`);
+    }
+  }
+}
+
 import { DEFAULT_PORT_DEV, DEFAULT_PORT_PROD } from "./constants.js";
 
 const defaultPort = process.env.NODE_ENV === "production" ? DEFAULT_PORT_PROD : DEFAULT_PORT_DEV;
@@ -48,8 +73,8 @@ const terminalManager = new TerminalManager();
 const prPoller = new PRPoller(wsBridge);
 const recorder = new RecorderManager();
 const cronScheduler = new CronScheduler(launcher, wsBridge);
-const assistantManager = new AssistantManager(launcher, wsBridge, port);
-const tunnelManager = new TunnelManager(port);
+const assistantManager = new AssistantManager(launcher, wsBridge);
+const tunnelManager = new TunnelManager();
 
 // ── Restore persisted sessions from disk ────────────────────────────────────
 wsBridge.setStore(sessionStore);

@@ -17,6 +17,8 @@ function getPort(argv: string[]): number {
 }
 
 function getBase(argv: string[]): string {
+  // Prefer COMPANION_API_URL when set (injected into spawned agent sessions)
+  if (process.env.COMPANION_API_URL) return process.env.COMPANION_API_URL;
   return `http://localhost:${getPort(argv)}/api`;
 }
 

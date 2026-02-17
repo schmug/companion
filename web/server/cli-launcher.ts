@@ -266,7 +266,15 @@ export class CliLauncher {
 
   private spawnCLI(sessionId: string, info: SdkSessionInfo, options: LaunchOptions & { resumeSessionId?: string }): void {
     let binary = options.claudeBinary || "claude";
-    const resolved = resolveBinary(binary);
+    // Use process.env.PATH (already enriched by index.ts with correct priority)
+    // rather than resolveBinary() which has its own PATH ordering that may pick
+    // up stale system binaries over user-installed ones.
+    const resolved = (() => {
+      try {
+        const { execFileSync } = require("node:child_process");
+        return execFileSync("which", [binary], { encoding: "utf-8", env: process.env, timeout: 5_000 }).trim() || null;
+      } catch { return null; }
+    })();
     if (resolved) {
       binary = resolved;
     } else {
@@ -316,13 +324,30 @@ export class CliLauncher {
     }
     args.push("-p", "");
 
-    // Use enriched PATH so spawned CLI processes inherit the user's
-    // full PATH (nvm, volta, etc.) regardless of how the server started.
+    // Enrich PATH so spawned CLI processes can find binaries from version
+    // managers (nvm, volta, etc.). Append extra dirs rather than replace,
+    // so the current process PATH (which already has the correct node) wins.
+    const currentPath = process.env.PATH || "";
+    const currentDirs = new Set(currentPath.split(":"));
+    const extraDirs = getEnrichedPath().split(":").filter((d) => d && !currentDirs.has(d));
+    // Add companion bin dir to PATH so spawned agents can find the `companion` CLI
+    const companionBinDir = resolve(
+      process.env.__COMPANION_PACKAGE_ROOT || resolve(__dirname, ".."),
+      "bin",
+    );
+    const enrichedPath = extraDirs.length ? `${currentPath}:${extraDirs.join(":")}` : currentPath;
+    const pathWithCompanion = currentDirs.has(companionBinDir)
+      ? enrichedPath
+      : `${companionBinDir}:${enrichedPath}`;
+
     const env: Record<string, string | undefined> = {
       ...process.env,
       CLAUDECODE: undefined,
       ...options.env,
-      PATH: getEnrichedPath(),
+      PATH: pathWithCompanion,
+      COMPANION_PORT: String(this.port),
+      COMPANION_SESSION_ID: sessionId,
+      COMPANION_API_URL: `http://localhost:${this.port}/api`,
     };
 
     console.log(`[cli-launcher] Spawning session ${sessionId}: ${binary} ${args.join(" ")}`);
@@ -437,8 +462,10 @@ export class CliLauncher {
     // lives alongside `codex` and spawn `node <codex.js>` directly.
     const binaryDir = resolve(binary, "..");
     const siblingNode = join(binaryDir, "node");
-    const enrichedPath = getEnrichedPath();
-    const spawnPath = [binaryDir, ...enrichedPath.split(":")].filter(Boolean).join(":");
+    const curPath = process.env.PATH || "";
+    const curDirs = new Set(curPath.split(":"));
+    const extraCodexDirs = [binaryDir, ...getEnrichedPath().split(":")].filter((d) => d && !curDirs.has(d));
+    const spawnPath = extraCodexDirs.length ? `${curPath}:${extraCodexDirs.join(":")}` : curPath;
 
     // Determine whether to invoke node explicitly or use the binary directly.
     // If a `node` binary exists next to `codex`, use it to bypass shebang issues.
@@ -457,12 +484,24 @@ export class CliLauncher {
       spawnCmd = [binary, ...args];
     }
 
+    // Add companion bin dir to PATH so spawned agents can find the `companion` CLI
+    const companionBinDir = resolve(
+      process.env.__COMPANION_PACKAGE_ROOT || resolve(__dirname, ".."),
+      "bin",
+    );
+    const pathWithCompanion = curDirs.has(companionBinDir)
+      ? spawnPath
+      : `${companionBinDir}:${spawnPath}`;
+
     const env: Record<string, string | undefined> = {
       ...process.env,
       CLAUDECODE: undefined,
       ...options.env,
       CODEX_HOME: codexHome,
-      PATH: spawnPath,
+      PATH: pathWithCompanion,
+      COMPANION_PORT: String(this.port),
+      COMPANION_SESSION_ID: sessionId,
+      COMPANION_API_URL: `http://localhost:${this.port}/api`,
     };
 
     console.log(`[cli-launcher] Spawning Codex session ${sessionId}: ${spawnCmd.join(" ")}`);
